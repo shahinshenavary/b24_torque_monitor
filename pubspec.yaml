@@ -1,0 +1,35 @@
+name: b24_torque_monitor
+description: A new Flutter project for B24 Telemetry.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+
+  # Bluetooth
+  flutter_blue_plus: ^1.36.8
+  permission_handler: ^11.4.0
+
+  # Database (Drift)
+  drift: ^2.13.0
+  sqlite3_flutter_libs: ^0.5.0
+  path_provider: ^2.1.1
+  path: ^1.8.3
+  uuid: ^4.2.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+  
+  # Code Generator
+  build_runner: ^2.4.6
+  drift_dev: ^2.13.0
+
+flutter:
+  uses-material-design: true
