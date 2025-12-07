@@ -627,6 +627,58 @@ class B24BluetoothService {
     }
   }
 
+  /// Scan for a specific DATA TAG to verify device exists
+  /// Returns true if device with this DATA TAG is found broadcasting
+  Future<bool> scanForDataTag(int targetDataTag, {Duration timeout = const Duration(seconds: 3)}) async {
+    print("🔍 Scanning for DATA TAG: 0x${targetDataTag.toRadixString(16).toUpperCase()}");
+    
+    bool deviceFound = false;
+    StreamSubscription? scanSubscription;
+    
+    try {
+      if (await fbp.FlutterBluePlus.isSupported == false) {
+        throw Exception("Bluetooth not supported");
+      }
+
+      final adapterState = await fbp.FlutterBluePlus.adapterState.first;
+      if (adapterState == fbp.BluetoothAdapterState.off) {
+        throw Exception("Bluetooth is off");
+      }
+
+      // Listen to discovery stream
+      scanSubscription = discoveryStream.listen((discovery) {
+        if (discovery.dataTag == targetDataTag) {
+          print("✅ Found device with DATA TAG 0x${targetDataTag.toRadixString(16).toUpperCase()}: ${discovery.deviceName}");
+          deviceFound = true;
+        }
+      });
+
+      // Start scanning
+      await startBroadcastMonitoring();
+      
+      // Wait for timeout
+      await Future.delayed(timeout);
+      
+      // Stop scanning
+      await stopBroadcastMonitoring();
+      await scanSubscription.cancel();
+      
+      if (deviceFound) {
+        print("✅ Device with DATA TAG 0x${targetDataTag.toRadixString(16).toUpperCase()} found");
+      } else {
+        print("❌ No device found with DATA TAG 0x${targetDataTag.toRadixString(16).toUpperCase()}");
+      }
+      
+      return deviceFound;
+      
+    } catch (e) {
+      print("❌ Scan error: $e");
+      await scanSubscription?.cancel();
+      await stopBroadcastMonitoring();
+      return false;
+    }
+  }
+
   // Enable/disable mock data
   void setMockDataEnabled(bool enabled) {
     _useMockData = enabled;
