@@ -23,24 +23,35 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 2, // ✅ تغییر: از 1 به 2
+      version: 5, // ✅ Changed to 5 for viewPin column
       onCreate: _createDB,
-      onUpgrade: _onUpgrade, // ✅ اضافه شد
+      onUpgrade: _onUpgrade,
     );
   }
 
-  // ✅ تابع جدید برای migration
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       // Migration from version 1 to 2
-      // Drop old tables and recreate (for development only)
       await db.execute('DROP TABLE IF EXISTS measurements');
       await db.execute('DROP TABLE IF EXISTS pile_sessions');
       await db.execute('DROP TABLE IF EXISTS piles');
       await db.execute('DROP TABLE IF EXISTS projects');
-      
-      // Recreate all tables with correct schema
       await _createDB(db, newVersion);
+    }
+    
+    if (oldVersion < 3) {
+      // Migration from version 2 to 3: Add finalDepth column
+      await db.execute('ALTER TABLE piles ADD COLUMN finalDepth REAL');
+    }
+    
+    if (oldVersion < 4) {
+      // Migration from version 3 to 4: Add deviceDataTags column
+      await db.execute('ALTER TABLE projects ADD COLUMN deviceDataTags TEXT DEFAULT ""');
+    }
+    
+    if (oldVersion < 5) {
+      // Migration from version 4 to 5: Add viewPin column
+      await db.execute('ALTER TABLE projects ADD COLUMN viewPin TEXT DEFAULT "0000"');
     }
   }
 
@@ -50,7 +61,9 @@ class DatabaseHelper {
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         location TEXT NOT NULL,
-        createdAt INTEGER NOT NULL
+        createdAt INTEGER NOT NULL,
+        deviceDataTags TEXT DEFAULT "",
+        viewPin TEXT DEFAULT "0000"
       )
     ''');
 
@@ -64,6 +77,7 @@ class DatabaseHelper {
         expectedTorque REAL NOT NULL,
         expectedDepth REAL NOT NULL,
         status TEXT NOT NULL,
+        finalDepth REAL,
         FOREIGN KEY (projectId) REFERENCES projects (id) ON DELETE CASCADE
       )
     ''');

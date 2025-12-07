@@ -39,7 +39,7 @@ class _HistoryPageState extends State<HistoryPage> {
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('خطا در بارگذاری: $e')),
+          SnackBar(content: Text('Loading error: $e')),
         );
       }
     }
@@ -75,13 +75,13 @@ class _HistoryPageState extends State<HistoryPage> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('فایل CSV در $path ذخیره شد')),
+          SnackBar(content: Text('CSV file saved at $path')),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('خطا در Export: $e')),
+          SnackBar(content: Text('Export error: $e')),
         );
       }
     }
@@ -98,7 +98,7 @@ class _HistoryPageState extends State<HistoryPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('نمودار گشتاور', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const Text('Torque Chart', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 16),
             SizedBox(
               height: 200,
@@ -178,7 +178,7 @@ class _HistoryPageState extends State<HistoryPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('تاریخچه اندازه‌گیری‌ها'),
+        title: const Text('Measurement History'),
         actions: [
           IconButton(
             icon: const Icon(Icons.download),
@@ -196,7 +196,7 @@ class _HistoryPageState extends State<HistoryPage> {
                     children: [
                       Icon(Icons.history, size: 64, color: Color(0xFF9CA3AF)),
                       SizedBox(height: 16),
-                      Text('هیچ داده‌ای ثبت نشده است'),
+                      Text('No data recorded'),
                     ],
                   ),
                 )
@@ -214,7 +214,7 @@ class _HistoryPageState extends State<HistoryPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'مجموع ${_measurements.length} رکورد',
+                                'Total ${_measurements.length} records',
                                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                               ),
                               const SizedBox(height: 16),

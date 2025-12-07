@@ -5,6 +5,7 @@ import '../models/pile.dart';
 import '../database/database_helper.dart';
 import 'add_project_page.dart';
 import 'pile_list_page.dart';
+import 'debug_bluetooth_page.dart';
 
 class ProjectsPage extends StatefulWidget {
   final String operatorCode;
@@ -47,7 +48,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('خطا در بارگذاری: $e')),
+          SnackBar(content: Text('Loading error: $e')),
         );
       }
     }
@@ -57,17 +58,17 @@ class _ProjectsPageState extends State<ProjectsPage> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('حذف پروژه'),
-        content: Text('آیا مطمئن هستید که می‌خواهید "${project.name}" را حذف کنید؟'),
+        title: const Text('Delete Project'),
+        content: Text('Are you sure you want to delete "${project.name}"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('لغو'),
+            child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: TextButton.styleFrom(foregroundColor: const Color(0xFFF87171)),
-            child: const Text('حذف'),
+            child: const Text('Delete'),
           ),
         ],
       ),
@@ -86,13 +87,26 @@ class _ProjectsPageState extends State<ProjectsPage> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('پروژه‌ها'),
+            const Text('Projects'),
             Text(
-              'اپراتور: ${widget.operatorCode}',
+              'Operator: ${widget.operatorCode}',
               style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
             ),
           ],
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.bug_report),
+            tooltip: 'Debug Scanner',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const DebugBluetoothPage(),
+                ),
+              );
+            },
+          ),
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -103,10 +117,10 @@ class _ProjectsPageState extends State<ProjectsPage> {
                     children: [
                       Icon(Icons.folder_off, size: 64, color: Colors.grey[600]),
                       const SizedBox(height: 16),
-                      const Text('هیچ پروژه‌ای وجود ندارد'),
+                      const Text('No projects found'),
                       const SizedBox(height: 8),
                       const Text(
-                        'برای شروع، یک پروژه جدید ایجاد کنید',
+                        'Create a new project to get started',
                         style: TextStyle(color: Color(0xFF9CA3AF)),
                       ),
                     ],
@@ -188,7 +202,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
                                         borderRadius: BorderRadius.circular(12),
                                       ),
                                       child: Text(
-                                        '$pileCount شمع',
+                                        '$pileCount piles',
                                         style: const TextStyle(
                                           color: Color(0xFF10B981),
                                           fontSize: 12,
@@ -221,7 +235,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
           _loadProjects();
         },
         icon: const Icon(Icons.add),
-        label: const Text('پروژه جدید'),
+        label: const Text('New Project'),
       ),
     );
   }

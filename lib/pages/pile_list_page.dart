@@ -41,7 +41,7 @@ class _PileListPageState extends State<PileListPage> {
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('خطا در بارگذاری: $e')),
+          SnackBar(content: Text('Loading error: $e')),
         );
       }
     }
@@ -61,11 +61,11 @@ class _PileListPageState extends State<PileListPage> {
   String _getStatusText(String status) {
     switch (status) {
       case 'completed':
-        return 'تکمیل شده';
+        return 'Completed';
       case 'in_progress':
-        return 'در حال انجام';
+        return 'In Progress';
       default:
-        return 'در انتظار';
+        return 'Pending';
     }
   }
 
@@ -93,7 +93,7 @@ class _PileListPageState extends State<PileListPage> {
                     children: [
                       Icon(Icons.push_pin, size: 64, color: Color(0xFF9CA3AF)),
                       SizedBox(height: 16),
-                      Text('هیچ شمعی وجود ندارد'),
+                      Text('No piles found'),
                     ],
                   ),
                 )
@@ -150,7 +150,7 @@ class _PileListPageState extends State<PileListPage> {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      'شماره ${pile.pileNumber} - ${pile.pileType}',
+                                      'No. ${pile.pileNumber} - ${pile.pileType}',
                                       style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
                                     ),
                                     const SizedBox(height: 4),

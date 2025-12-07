@@ -7,6 +7,7 @@ class Pile {
   final double expectedTorque;
   final double expectedDepth;
   final String status;
+  final double? finalDepth; // ✅ اضافه شد
 
   Pile({
     required this.id,
@@ -17,6 +18,7 @@ class Pile {
     required this.expectedTorque,
     required this.expectedDepth,
     this.status = 'pending',
+    this.finalDepth, // ✅ اضافه شد
   });
 
   Map<String, dynamic> toMap() {
@@ -29,6 +31,7 @@ class Pile {
       'expectedTorque': expectedTorque,
       'expectedDepth': expectedDepth,
       'status': status,
+      'finalDepth': finalDepth, // ✅ اضافه شد
     };
   }
 
@@ -42,6 +45,7 @@ class Pile {
       expectedTorque: (map['expectedTorque'] as num).toDouble(),
       expectedDepth: (map['expectedDepth'] as num).toDouble(),
       status: map['status'] as String? ?? 'pending',
+      finalDepth: map['finalDepth'] != null ? (map['finalDepth'] as num).toDouble() : null, // ✅ اضافه شد
     );
   }
 
@@ -54,6 +58,7 @@ class Pile {
     double? expectedTorque,
     double? expectedDepth,
     String? status,
+    double? finalDepth, // ✅ اضافه شد
   }) {
     return Pile(
       id: id ?? this.id,
@@ -64,6 +69,7 @@ class Pile {
       expectedTorque: expectedTorque ?? this.expectedTorque,
       expectedDepth: expectedDepth ?? this.expectedDepth,
       status: status ?? this.status,
+      finalDepth: finalDepth ?? this.finalDepth, // ✅ اضافه شد
     );
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'home_page.dart';
+import 'debug_bluetooth_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({Key? key}) : super(key: key);
@@ -25,7 +26,7 @@ class _LoginPageState extends State<LoginPage> {
           ),
         );
       } else {
-        setState(() => _errorMessage = 'کد اپراتور اشتباه است');
+        setState(() => _errorMessage = 'Invalid operator code');
       }
     }
   }
@@ -33,6 +34,22 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        actions: [
+          // Debug button in top-right corner
+          IconButton(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const DebugBluetoothPage(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.bug_report),
+            tooltip: 'Bluetooth Debug',
+          ),
+        ],
+      ),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -55,20 +72,20 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'سیستم مانیتورینگ نصب شمع‌های ساختمانی',
+                    'Pile Installation Monitoring System',
                     style: TextStyle(color: Color(0xFF9CA3AF)),
                   ),
                   const SizedBox(height: 48),
                   TextFormField(
                     controller: _codeController,
                     decoration: const InputDecoration(
-                      labelText: 'کد اپراتور',
-                      hintText: 'کد اپراتور خود را وارد کنید',
+                      labelText: 'Operator Code',
+                      hintText: 'Enter your operator code',
                       prefixIcon: Icon(Icons.person),
                     ),
                     validator: (value) {
                       if (value == null || value.isEmpty) {
-                        return 'لطفاً کد اپراتور را وارد کنید';
+                        return 'Please enter operator code';
                       }
                       return null;
                     },
@@ -97,7 +114,7 @@ class _LoginPageState extends State<LoginPage> {
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: _handleLogin,
-                      child: const Text('ورود'),
+                      child: const Text('Login'),
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -113,7 +130,7 @@ class _LoginPageState extends State<LoginPage> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'کد پیش‌فرض: $OPERATOR_CODE',
+                            'Default code: $OPERATOR_CODE',
                             style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
                           ),
                         ),

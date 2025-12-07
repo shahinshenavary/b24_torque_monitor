@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'projects_page.dart';
 import 'history_page.dart';
+import 'settings_page.dart';
 
 class HomePage extends StatefulWidget {
   final String operatorCode;
@@ -22,6 +23,7 @@ class _HomePageState extends State<HomePage> {
     _pages = [
       ProjectsPage(operatorCode: widget.operatorCode),
       HistoryPage(operatorCode: widget.operatorCode),
+      const SettingsPage(),
     ];
   }
 
@@ -37,11 +39,15 @@ class _HomePageState extends State<HomePage> {
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.folder),
-            label: 'پروژه‌ها',
+            label: 'Projects',
           ),
           NavigationDestination(
             icon: Icon(Icons.history),
-            label: 'تاریخچه',
+            label: 'History',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.settings),
+            label: 'Settings',
           ),
         ],
       ),
