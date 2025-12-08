@@ -23,7 +23,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 5, // ✅ Changed to 5 for viewPin column
+      version: 6, // ✅ Changed to 6 for status columns
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -52,6 +52,12 @@ class DatabaseHelper {
     if (oldVersion < 5) {
       // Migration from version 4 to 5: Add viewPin column
       await db.execute('ALTER TABLE projects ADD COLUMN viewPin TEXT DEFAULT "0000"');
+    }
+    
+    if (oldVersion < 6) {
+      // Migration from version 5 to 6: Add device status columns to measurements
+      await db.execute('ALTER TABLE measurements ADD COLUMN statusByte INTEGER DEFAULT 0');
+      await db.execute('ALTER TABLE measurements ADD COLUMN statusJson TEXT DEFAULT "{}"');
     }
   }
 
@@ -96,21 +102,7 @@ class DatabaseHelper {
       )
     ''');
 
-    await db.execute('''
-      CREATE TABLE measurements (
-        id TEXT PRIMARY KEY,
-        projectId TEXT NOT NULL,
-        pileId TEXT NOT NULL,
-        operatorCode TEXT NOT NULL,
-        timestamp INTEGER NOT NULL,
-        torque REAL NOT NULL,
-        force REAL NOT NULL,
-        mass REAL NOT NULL,
-        depth REAL NOT NULL,
-        FOREIGN KEY (projectId) REFERENCES projects (id) ON DELETE CASCADE,
-        FOREIGN KEY (pileId) REFERENCES piles (id) ON DELETE CASCADE
-      )
-    ''');
+    await db.execute('''\n      CREATE TABLE measurements (\n        id TEXT PRIMARY KEY,\n        projectId TEXT NOT NULL,\n        pileId TEXT NOT NULL,\n        operatorCode TEXT NOT NULL,\n        timestamp INTEGER NOT NULL,\n        torque REAL NOT NULL,\n        force REAL NOT NULL,\n        mass REAL NOT NULL,\n        depth REAL NOT NULL,\n        statusByte INTEGER DEFAULT 0,\n        statusJson TEXT DEFAULT \"{}\",\n        FOREIGN KEY (projectId) REFERENCES projects (id) ON DELETE CASCADE,\n        FOREIGN KEY (pileId) REFERENCES piles (id) ON DELETE CASCADE\n      )\n    ''');
 
     await db.execute('CREATE INDEX idx_measurements_pile ON measurements(pileId)');
     await db.execute('CREATE INDEX idx_measurements_timestamp ON measurements(timestamp)');

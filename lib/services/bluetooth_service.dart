@@ -2,18 +2,21 @@ import 'dart:async';
 import 'dart:math';
 import 'dart:typed_data';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart' as fbp;
+import '../models/device_status.dart';
 
 class TorqueData {
   final double torque;
   final double force;
   final double mass;
   final int timestamp;
+  final DeviceStatus status; // 🆕 Device status
 
   TorqueData({
     required this.torque,
     required this.force,
     required this.mass,
     required this.timestamp,
+    required this.status,
   });
 }
 
@@ -384,6 +387,7 @@ class B24BluetoothService {
         force: torque * 9.80665, // Convert to Newtons (from Units table)
         mass: torque / 9.80665, // Approximate mass in kg
         timestamp: DateTime.now().millisecondsSinceEpoch,
+        status: DeviceStatus.fromByte(status),
       ));
       
       // Send debug info to stream
@@ -443,6 +447,7 @@ class B24BluetoothService {
         force: torque * 9.80665,
         mass: torque / 9.80665,
         timestamp: DateTime.now().millisecondsSinceEpoch,
+        status: DeviceStatus.fromByte(status),
       ));
       
       // 🆕 Send COMPLETE packet to debug (not just encoded bytes)
@@ -532,6 +537,7 @@ class B24BluetoothService {
                 force: torque * 9.80665,
                 mass: torque / 9.80665,
                 timestamp: DateTime.now().millisecondsSinceEpoch,
+                status: DeviceStatus.fromByte(value[0]),
               ));
             }
           });
@@ -608,6 +614,7 @@ class B24BluetoothService {
         force: force,
         mass: mass,
         timestamp: DateTime.now().millisecondsSinceEpoch,
+        status: DeviceStatus.ok,
       ));
       
       // Send debug info to stream

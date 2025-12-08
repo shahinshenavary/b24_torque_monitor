@@ -1,3 +1,5 @@
+import '../models/device_status.dart';
+
 class Measurement {
   final String id;
   final String projectId;
@@ -8,6 +10,7 @@ class Measurement {
   final double force;
   final double mass;
   final double depth;
+  final DeviceStatus status; // 🆕 Device status at time of measurement
 
   Measurement({
     required this.id,
@@ -19,6 +22,7 @@ class Measurement {
     required this.force,
     required this.mass,
     required this.depth,
+    required this.status,
   });
 
   Map<String, dynamic> toMap() {
@@ -32,6 +36,8 @@ class Measurement {
       'force': force,
       'mass': mass,
       'depth': depth,
+      'statusByte': status.rawByte, // 🆕 Store raw byte
+      'statusJson': status.toJson().toString(), // 🆕 Store full JSON for analysis
     };
   }
 
@@ -46,6 +52,7 @@ class Measurement {
       force: (map['force'] as num).toDouble(),
       mass: (map['mass'] as num).toDouble(),
       depth: (map['depth'] as num).toDouble(),
+      status: DeviceStatus.fromByte(map['statusByte'] as int? ?? 0x00), // 🆕 Parse from byte
     );
   }
 
@@ -59,6 +66,7 @@ class Measurement {
     double? force,
     double? mass,
     double? depth,
+    DeviceStatus? status,
   }) {
     return Measurement(
       id: id ?? this.id,
@@ -70,6 +78,7 @@ class Measurement {
       force: force ?? this.force,
       mass: mass ?? this.mass,
       depth: depth ?? this.depth,
+      status: status ?? this.status,
     );
   }
 }

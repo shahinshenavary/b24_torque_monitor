@@ -5,8 +5,10 @@ import '../models/project.dart';
 import '../models/pile.dart';
 import '../models/measurement.dart';
 import '../models/pile_session.dart';
+import '../models/device_status.dart';
 import '../database/database_helper.dart';
 import '../services/bluetooth_service.dart';
+import '../widgets/device_status_indicators.dart';
 
 class MonitoringPage extends StatefulWidget {
   final Project project;
@@ -35,6 +37,7 @@ class _MonitoringPageState extends State<MonitoringPage> {
     force: 0,
     mass: 0,
     timestamp: DateTime.now().millisecondsSinceEpoch,
+    status: DeviceStatus.ok, // 🆕 Initialize with OK status
   );
 
   // Debug info
@@ -237,6 +240,7 @@ class _MonitoringPageState extends State<MonitoringPage> {
         force: data.force,
         mass: data.mass,
         depth: _currentDepth + 0.1,
+        status: data.status, // 🆕 Save device status with measurement
       );
 
       await DatabaseHelper.instance.insertMeasurement(measurement);
@@ -515,6 +519,9 @@ class _MonitoringPageState extends State<MonitoringPage> {
                           ),
                         ),
                       ),
+                      const SizedBox(height: 16),
+                      // 🆕 Device Status Indicators
+                      LiveStatusIndicator(status: _currentData.status),
                       const SizedBox(height: 16),
                       Card(
                         child: Padding(
