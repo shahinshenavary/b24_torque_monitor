@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:excel/excel.dart';
+import 'package:excel/excel.dart' hide Border;
 import 'dart:io';
 import '../models/project.dart';
 import '../models/pile.dart';
 import '../database/database_helper.dart';
 import '../services/bluetooth_service.dart';
+import 'bluetooth_debug_page.dart';
 
 class AddProjectPage extends StatefulWidget {
   final String operatorCode;
@@ -170,10 +171,42 @@ class _AddProjectPageState extends State<AddProjectPage> {
               'Enter the DATA TAG in hexadecimal format:',
               style: TextStyle(fontSize: 14),
             ),
-            const SizedBox(height: 8),
-            const Text(
-              'Example: 4D80, 5A90, 6BC0',
-              style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF3C7),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFFBBF24)),
+              ),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.info, size: 16, color: Color(0xFF92400E)),
+                      SizedBox(width: 8),
+                      Text(
+                        'How to find DATA TAG:',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF92400E)),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 6),
+                  Text(
+                    '1. Use Debug BLE to see packets',
+                    style: TextStyle(fontSize: 11, color: Color(0xFF92400E)),
+                  ),
+                  Text(
+                    '2. Look at RAW data bytes [2] and [3]',
+                    style: TextStyle(fontSize: 11, color: Color(0xFF92400E)),
+                  ),
+                  Text(
+                    '3. Enter them here (e.g., if you see 4D 80, enter 4D80)',
+                    style: TextStyle(fontSize: 11, color: Color(0xFF92400E)),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 16),
             TextField(
@@ -221,8 +254,24 @@ class _AddProjectPageState extends State<AddProjectPage> {
       return;
     }
     
+    // Validate length (must be exactly 4 hex digits)
+    if (hexString.length != 4) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('DATA TAG must be exactly 4 hex digits (e.g., 4D80)')),
+      );
+      return;
+    }
+    
     try {
-      final dataTag = int.parse(hexString, radix: 16);
+      // User enters: 4D80 (bytes as they appear in packet)
+      // We need to convert to Little Endian: 0x804D
+      // Because packet bytes [2]=4D (low byte), [3]=80 (high byte)
+      
+      final byte1 = int.parse(hexString.substring(0, 2), radix: 16); // 4D
+      final byte2 = int.parse(hexString.substring(2, 4), radix: 16); // 80
+      
+      // Little Endian: dataTag = high_byte << 8 | low_byte
+      final dataTag = (byte2 << 8) | byte1; // 0x804D
       
       if (_deviceDataTags.contains(dataTag)) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -234,7 +283,7 @@ class _AddProjectPageState extends State<AddProjectPage> {
       // Close the input dialog first
       Navigator.pop(context);
       
-      // Show scanning dialog
+      // Show scanning dialog with BOTH formats
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -249,8 +298,13 @@ class _AddProjectPageState extends State<AddProjectPage> {
                 const Text('Scanning for device...'),
                 const SizedBox(height: 8),
                 Text(
-                  'Looking for DATA TAG: 0x$hexString',
+                  'Looking for pattern: 0x$hexString',
                   style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
+                  textAlign: TextAlign.center,
+                ),
+                Text(
+                  '(Internal TAG: 0x${dataTag.toRadixString(16).padLeft(4, '0').toUpperCase()})',
+                  style: const TextStyle(fontSize: 10, color: Color(0xFFD1D5DB)),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -282,15 +336,15 @@ class _AddProjectPageState extends State<AddProjectPage> {
           );
         }
       } else {
-        // Device not found - show warning
+        // Device not found - show error and don't allow adding
         if (!mounted) return;
         
-        final shouldAddAnyway = await showDialog<bool>(
+        await showDialog(
           context: context,
           builder: (context) => AlertDialog(
             title: const Row(
               children: [
-                Icon(Icons.warning, color: Color(0xFFF59E0B)),
+                Icon(Icons.error, color: Color(0xFFF87171)),
                 SizedBox(width: 8),
                 Text('Device Not Found'),
               ],
@@ -313,41 +367,35 @@ class _AddProjectPageState extends State<AddProjectPage> {
                 const Text('• DATA TAG is incorrect'),
                 const Text('• Bluetooth is not enabled'),
                 const SizedBox(height: 12),
-                const Text(
-                  'Do you want to add it anyway?',
-                  style: TextStyle(fontSize: 14, color: Color(0xFF9CA3AF)),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF2F2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.info_outline, size: 16, color: Color(0xFFF87171)),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Please enter the correct DATA TAG',
+                          style: TextStyle(fontSize: 12, color: Color(0xFF991B1B)),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
             actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
-              ),
               ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFF59E0B),
-                ),
-                child: const Text('Add Anyway'),
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
               ),
             ],
           ),
         );
-        
-        if (shouldAddAnyway == true) {
-          setState(() {
-            _deviceDataTags.add(dataTag);
-          });
-          
-          _dataTagController.clear();
-          
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('⚠️ DATA TAG 0x$hexString added (device not verified)')),
-            );
-          }
-        }
       }
     } catch (e) {
       if (mounted) {
@@ -432,6 +480,17 @@ class _AddProjectPageState extends State<AddProjectPage> {
             label: const Text('Save'),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const BluetoothDebugPage()),
+          );
+        },
+        icon: const Icon(Icons.bug_report),
+        label: const Text('Debug BLE'),
+        backgroundColor: const Color(0xFF8B5CF6),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),

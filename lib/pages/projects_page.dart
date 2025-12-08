@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../models/project.dart';
 import '../models/pile.dart';
 import '../database/database_helper.dart';
+import '../services/excel_export_service.dart';
 import 'add_project_page.dart';
 import 'pile_list_page.dart';
 import 'debug_bluetooth_page.dart';
@@ -59,7 +61,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Project'),
-        content: Text('Are you sure you want to delete "${project.name}"?'),
+        content: Text('Are you sure you want to delete \"${project.name}\"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -77,6 +79,52 @@ class _ProjectsPageState extends State<ProjectsPage> {
     if (confirm == true) {
       await DatabaseHelper.instance.deleteProject(project.id);
       _loadProjects();
+    }
+  }
+
+  Future<void> _exportProject(Project project) async {
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => WillPopScope(
+        onWillPop: () async => false,
+        child: const AlertDialog(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Preparing Excel report...'),
+              SizedBox(height: 8),
+              Text(
+                'Please wait',
+                style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    try {
+      await ExcelExportService.instance.shareProject(project);
+      
+      // Close loading dialog
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      // Close loading dialog
+      if (mounted) Navigator.pop(context);
+      
+      // Show error
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to share: $e'),
+            backgroundColor: const Color(0xFFF87171),
+          ),
+        );
+      }
     }
   }
 
@@ -214,6 +262,12 @@ class _ProjectsPageState extends State<ProjectsPage> {
                                     IconButton(
                                       icon: const Icon(Icons.delete_outline, color: Color(0xFFF87171)),
                                       onPressed: () => _deleteProject(project),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    IconButton(
+                                      icon: const Icon(Icons.share, color: Color(0xFF10B981)),
+                                      tooltip: 'Share Excel Report',
+                                      onPressed: () => _exportProject(project),
                                     ),
                                   ],
                                 ),

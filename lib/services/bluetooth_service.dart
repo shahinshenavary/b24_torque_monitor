@@ -250,12 +250,29 @@ class B24BluetoothService {
         if (data[i] == 0x4D && data[i + 1] == 0x80) {
           print("   🎯 Found B24 pattern at byte $i: 0x4D 0x80");
           
+          // Extract DATA TAG (0x4D 0x80 = 0x804D in little endian = 32845 decimal)
+          final dataTag = (data[i + 1] << 8) | data[i]; // Little endian: 0x804D
+          final hexString = dataTag.toRadixString(16).padLeft(4, '0').toUpperCase();
+          print("   Data Tag: $dataTag (0x$hexString)");
+          
+          // 🆕 Emit device discovery event (only once per device during scan)
+          if (_isScanning && !_discoveredDataTags.contains(dataTag)) {
+            _discoveredDataTags.add(dataTag);
+            _discoveryController.add(DeviceDiscoveryInfo(
+              dataTag: dataTag,
+              deviceName: deviceName,
+              rssi: rssi,
+              timestamp: DateTime.now().millisecondsSinceEpoch,
+            ));
+            print("   📢 Device discovery event emitted: DATA TAG 0x$hexString");
+          }
+          
           int dataStartIndex = i + 2; // Data starts after 4D 80
           
           // Need at least 6 bytes after the pattern
           if (dataStartIndex + 6 <= data.length) {
             print("   ✅ Sufficient data after pattern (${data.length - dataStartIndex} bytes)");
-            _decodeAndEmit(data, dataStartIndex);
+            _decodeAndEmit(data, dataStartIndex, dataTag: dataTag);
             return; // Found and processed, exit
           } else {
             print("   ⚠️ Insufficient data after pattern (${data.length - dataStartIndex} bytes, need 6)");
@@ -278,6 +295,8 @@ class B24BluetoothService {
   }) {
     // Legacy format: Format ID + Data Tag + Encoded Data
     final hexDump = data.map((b) => b.toRadixString(16).padLeft(2, '0').toUpperCase()).join(' ');
+    
+    print("📦 COMPLETE MANUFACTURER DATA (${data.length} bytes): $hexDump");
     
     // Validate packet length (minimum 14 bytes)
     if (data.length < 14) {
@@ -381,8 +400,11 @@ class B24BluetoothService {
     }
   }
 
-  void _decodeAndEmit(List<int> rawPacket, int startIndex) {
+  void _decodeAndEmit(List<int> rawPacket, int startIndex, {int? dataTag}) {
     try {
+      // 🆕 Send COMPLETE manufacturer data to debug (including pattern)
+      final completeHex = rawPacket.map((b) => b.toRadixString(16).padLeft(2, '0').toUpperCase()).join(' ');
+      
       // Extract 6 bytes after 4D 80 pattern
       List<int> encodedBytes = rawPacket.sublist(startIndex, startIndex + 6);
       final encodedHex = encodedBytes.map((b) => b.toRadixString(16).padLeft(2, '0').toUpperCase()).join(' ');
@@ -423,9 +445,9 @@ class B24BluetoothService {
         timestamp: DateTime.now().millisecondsSinceEpoch,
       ));
       
-      // Send debug info
+      // 🆕 Send COMPLETE packet to debug (not just encoded bytes)
       _debugController.add(DebugInfo(
-        rawHex: encodedHex,
+        rawHex: completeHex,  // Complete manufacturer data
         decodedHex: decodedHex,
         status: "✅ B24 Data: Torque=$torque Nm",
         error: "",
@@ -629,7 +651,7 @@ class B24BluetoothService {
 
   /// Scan for a specific DATA TAG to verify device exists
   /// Returns true if device with this DATA TAG is found broadcasting
-  Future<bool> scanForDataTag(int targetDataTag, {Duration timeout = const Duration(seconds: 3)}) async {
+  Future<bool> scanForDataTag(int targetDataTag, {Duration timeout = const Duration(seconds: 10)}) async {
     print("🔍 Scanning for DATA TAG: 0x${targetDataTag.toRadixString(16).toUpperCase()}");
     
     bool deviceFound = false;
