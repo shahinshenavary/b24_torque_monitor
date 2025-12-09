@@ -8,7 +8,6 @@ import '../models/pile_session.dart';
 import '../models/device_status.dart';
 import '../database/database_helper.dart';
 import '../services/bluetooth_service.dart';
-import '../widgets/device_status_indicators.dart';
 
 class MonitoringPage extends StatefulWidget {
   final Project project;
@@ -29,7 +28,7 @@ class MonitoringPage extends StatefulWidget {
 class _MonitoringPageState extends State<MonitoringPage> {
   static const int RECORDING_INTERVAL_MS = 1000;
   
-  // ✅ Dynamic threshold loaded from settings
+  // ✅ Dynamic threshold loaded from settings (kept for display purposes only)
   double _recordingThreshold = 100.0;
 
   TorqueData _currentData = TorqueData(
@@ -49,7 +48,8 @@ class _MonitoringPageState extends State<MonitoringPage> {
     isConnected: false,
     isMockData: false,
   );
-  bool _showDebugPanel = true; // Show debug panel by default
+  // ❌ Remove debug panel flag
+  // bool _showDebugPanel = true; // Show debug panel by default
 
   PileSession? _session;
   bool _isRecording = false;
@@ -57,7 +57,8 @@ class _MonitoringPageState extends State<MonitoringPage> {
   int _recordCount = 0;
   double _currentDepth = 0;
   bool _isCompleted = false;
-  bool _wasAboveThreshold = false;
+  // ❌ Remove auto-recording related variables
+  // bool _wasAboveThreshold = false;
   int _lastRecordTime = 0;
   
   StreamSubscription<TorqueData>? _dataSubscription;
@@ -85,21 +86,30 @@ class _MonitoringPageState extends State<MonitoringPage> {
 
   Future<void> _loadSession() async {
     final session = await DatabaseHelper.instance.getActivePileSession(widget.pile.id);
+    
+    // ✅ ALWAYS load existing measurements count (even for completed piles)
+    final measurements = await DatabaseHelper.instance.getMeasurementsByPile(widget.pile.id);
+    setState(() {
+      _recordCount = measurements.length;
+      if (measurements.isNotEmpty) {
+        _currentDepth = measurements.last.depth;
+      }
+    });
+    
     if (session != null) {
       setState(() {
         _session = session;
         _isRecording = session.status == 'active' || session.status == 'paused';
         _recordingStatus = session.status == 'active' ? 'recording' : 'paused';
-      });
-
-      final measurements = await DatabaseHelper.instance.getMeasurementsByPile(widget.pile.id);
-      setState(() {
-        _recordCount = measurements.length;
-        if (measurements.isNotEmpty) {
-          _currentDepth = measurements.last.depth;
+        // ✅ Only set _isCompleted if session is completed
+        if (session.status == 'completed') {
+          _isCompleted = true;
         }
       });
     }
+    
+    // ✅ Don't set _isCompleted here - allow user to restart recording
+    // The completed badge will still show in AppBar
   }
 
   Future<void> _connectBluetooth() async {
@@ -126,7 +136,8 @@ class _MonitoringPageState extends State<MonitoringPage> {
       // Start listening to data stream first
       _dataSubscription = B24BluetoothService.instance.dataStream.listen((data) {
         setState(() => _currentData = data);
-        _handleAutoRecording(data);
+        // ❌ Remove auto-recording logic
+        _handleRecordingTick(data);
       });
 
       // Listen to debug info stream
@@ -159,22 +170,10 @@ class _MonitoringPageState extends State<MonitoringPage> {
     }
   }
 
-  void _handleAutoRecording(TorqueData data) {
-    if (_isCompleted) return;
-
-    // ✅ Use absolute value to handle both clockwise (+) and counter-clockwise (-) rotation
-    final isAboveThreshold = data.torque.abs() >= _recordingThreshold;
-    final now = DateTime.now().millisecondsSinceEpoch;
-
-    if (isAboveThreshold && !_wasAboveThreshold) {
-      _startOrResumeRecording();
-    } else if (!isAboveThreshold && _wasAboveThreshold) {
-      _pauseRecording();
-    }
-
-    _wasAboveThreshold = isAboveThreshold;
-
-    if (_recordingStatus == 'recording' && _session != null) {
+  void _handleRecordingTick(TorqueData data) {
+    // ✅ Only save measurements when actively recording (manual control)
+    if (_recordingStatus == 'recording' && _session != null && !_isCompleted) {
+      final now = DateTime.now().millisecondsSinceEpoch;
       if (now - _lastRecordTime >= RECORDING_INTERVAL_MS) {
         _saveMeasurement(data);
         _lastRecordTime = now;
@@ -182,7 +181,97 @@ class _MonitoringPageState extends State<MonitoringPage> {
     }
   }
 
-  Future<void> _startOrResumeRecording() async {
+  // ✅ Manual Start/Resume Recording
+  Future<void> _handleStartRecording() async {
+    // ✅ IMPORTANT: Load the latest pile data from database to check if it's completed
+    final latestPile = await DatabaseHelper.instance.getPile(widget.pile.id);
+    if (latestPile == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Error: Pile not found'),
+          backgroundColor: Color(0xFFF87171),
+        ),
+      );
+      return;
+    }
+
+    // Check if pile is already completed and has existing data
+    if (latestPile.status == 'completed' && _recordCount > 0) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.warning, color: Color(0xFFFBBF24), size: 28),
+              SizedBox(width: 8),
+              Text('Pile Already Completed'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'This pile has already been completed with the following data:',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1F2937),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFF374151)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Records:', style: TextStyle(color: Color(0xFF9CA3AF))),
+                        Text('$_recordCount', style: const TextStyle(fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Final Depth:', style: TextStyle(color: Color(0xFF9CA3AF))),
+                        Text('${latestPile.finalDepth?.toStringAsFixed(2) ?? "N/A"} m', style: const TextStyle(fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Are you sure you want to continue recording? New data will be added to existing records and the pile status will change to "In Progress".',
+                style: TextStyle(fontSize: 13, color: Color(0xFFF87171)),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFBBF24),
+                foregroundColor: const Color(0xFF1F2937),
+              ),
+              child: const Text('Yes, Continue Recording'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed != true) return;
+    }
+
     try {
       PileSession currentSession = _session ?? PileSession(
         id: 'session-${DateTime.now().millisecondsSinceEpoch}',
@@ -200,17 +289,44 @@ class _MonitoringPageState extends State<MonitoringPage> {
         await DatabaseHelper.instance.updatePileSession(currentSession);
       }
 
+      // ✅ Update pile status to "in_progress" when starting recording
+      // This applies to both pending piles and completed piles that are being re-recorded
+      if (latestPile.status == 'pending' || latestPile.status == 'completed') {
+        final updatedPile = latestPile.copyWith(status: 'in_progress');
+        await DatabaseHelper.instance.updatePile(updatedPile);
+      }
+
       setState(() {
         _session = currentSession;
         _isRecording = true;
         _recordingStatus = 'recording';
+        _isCompleted = false;
       });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Recording started'),
+            backgroundColor: Color(0xFF10B981),
+            duration: Duration(seconds: 1),
+          ),
+        );
+      }
     } catch (e) {
-      debugPrint('Error starting/resuming recording: $e');
+      debugPrint('Error starting recording: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: const Color(0xFFF87171),
+          ),
+        );
+      }
     }
   }
 
-  Future<void> _pauseRecording() async {
+  // ✅ Manual Pause Recording
+  Future<void> _handlePauseRecording() async {
     if (_session == null) return;
 
     try {
@@ -221,8 +337,45 @@ class _MonitoringPageState extends State<MonitoringPage> {
         _session = updatedSession;
         _recordingStatus = 'paused';
       });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Recording paused'),
+            backgroundColor: Color(0xFFFBBF24),
+            duration: Duration(seconds: 1),
+          ),
+        );
+      }
     } catch (e) {
       debugPrint('Error pausing recording: $e');
+    }
+  }
+
+  // ✅ Manual Resume Recording
+  Future<void> _handleResumeRecording() async {
+    if (_session == null) return;
+
+    try {
+      final updatedSession = _session!.copyWith(status: 'active');
+      await DatabaseHelper.instance.updatePileSession(updatedSession);
+      
+      setState(() {
+        _session = updatedSession;
+        _recordingStatus = 'recording';
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Recording resumed'),
+            backgroundColor: Color(0xFF10B981),
+            duration: Duration(seconds: 1),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error resuming recording: $e');
     }
   }
 
@@ -256,6 +409,12 @@ class _MonitoringPageState extends State<MonitoringPage> {
 
   Future<void> _handleComplete() async {
     if (_session == null) return;
+
+    // ✅ FIRST: Stop recording immediately before asking for depth
+    setState(() {
+      _recordingStatus = 'idle';
+      _isRecording = false;
+    });
 
     // ✅ نمایش دیالوگ برای دریافت عمق نهایی
     final finalDepthController = TextEditingController(text: _currentDepth.toStringAsFixed(2));
@@ -296,7 +455,14 @@ class _MonitoringPageState extends State<MonitoringPage> {
       ),
     );
 
-    if (confirmed != true) return;
+    if (confirmed != true) {
+      // ✅ If cancelled, resume recording
+      setState(() {
+        _recordingStatus = 'paused';
+        _isRecording = true;
+      });
+      return;
+    }
 
     final finalDepth = double.tryParse(finalDepthController.text);
     if (finalDepth == null || finalDepth <= 0) {
@@ -306,6 +472,11 @@ class _MonitoringPageState extends State<MonitoringPage> {
           backgroundColor: Color(0xFFF87171),
         ),
       );
+      // ✅ If invalid, resume recording
+      setState(() {
+        _recordingStatus = 'paused';
+        _isRecording = true;
+      });
       return;
     }
 
@@ -336,11 +507,32 @@ class _MonitoringPageState extends State<MonitoringPage> {
           const SnackBar(
             content: Text('Pile completed successfully'),
             backgroundColor: Color(0xFF10B981),
+            duration: Duration(seconds: 2),
           ),
         );
+        
+        // ✅ Navigate back to pile list page after completion
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (mounted) {
+          Navigator.of(context).pop(); // Go back to pile list
+        }
       }
     } catch (e) {
       debugPrint('Error completing session: $e');
+      // ✅ If error, resume recording
+      setState(() {
+        _recordingStatus = 'paused';
+        _isRecording = true;
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: const Color(0xFFF87171),
+          ),
+        );
+      }
     }
   }
 
@@ -488,19 +680,19 @@ class _MonitoringPageState extends State<MonitoringPage> {
                                   children: [
                                     Text(
                                       _recordingStatus == 'recording'
-                                          ? 'Auto Recording'
+                                          ? 'Recording'
                                           : _recordingStatus == 'paused'
                                               ? 'Paused'
-                                              : 'Ready',
+                                              : 'Ready to Record',
                                       style: const TextStyle(fontWeight: FontWeight.bold),
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
                                       _recordingStatus == 'recording'
-                                          ? 'Torque ≥ ±${_recordingThreshold.toStringAsFixed(1)} Nm - Recording data'
+                                          ? 'Data is being recorded every ${(RECORDING_INTERVAL_MS / 1000).toStringAsFixed(1)}s'
                                           : _recordingStatus == 'paused'
-                                              ? 'Torque < ±${_recordingThreshold.toStringAsFixed(1)} Nm - Waiting for drill'
-                                              : 'Recording starts at ±${_recordingThreshold.toStringAsFixed(1)} Nm (both directions)',
+                                              ? 'Recording paused - press Resume to continue'
+                                              : 'Press Start Recording to begin',
                                       style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
                                     ),
                                   ],
@@ -521,7 +713,7 @@ class _MonitoringPageState extends State<MonitoringPage> {
                       ),
                       const SizedBox(height: 16),
                       // 🆕 Device Status Indicators
-                      LiveStatusIndicator(status: _currentData.status),
+                      _buildStatusIndicators(_currentData.status),
                       const SizedBox(height: 16),
                       Card(
                         child: Padding(
@@ -672,116 +864,80 @@ class _MonitoringPageState extends State<MonitoringPage> {
                         ),
                       ),
                       const SizedBox(height: 24),
-                      if (_isRecording && !_isCompleted)
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: _handleComplete,
-                            icon: const Icon(Icons.check_circle),
-                            label: const Text('Complete & Finish'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF10B981),
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                            ),
-                          ),
-                        ),
-                      if (_isCompleted)
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF064E3B),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFF10B981)),
-                          ),
-                          child: Column(
-                            children: [
-                              const Icon(Icons.check_circle, size: 48, color: Color(0xFF10B981)),
-                              const SizedBox(height: 12),
-                              const Text(
-                                'Pile Completed Successfully',
-                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                '$_recordCount records saved - Final depth: ${widget.pile.finalDepth?.toStringAsFixed(2) ?? _currentDepth.toStringAsFixed(2)} m',
-                                style: const TextStyle(color: Color(0xFF9CA3AF)),
-                              ),
-                            ],
-                          ),
-                        ),
-                      if (_showDebugPanel)
-                        Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text('Debug Info', style: TextStyle(fontWeight: FontWeight.bold)),
-                                const SizedBox(height: 12),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        const Text('Raw Hex', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
-                                        Text(_debugInfo.rawHex),
-                                      ],
-                                    ),
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        const Text('Decoded Hex', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
-                                        Text(_debugInfo.decodedHex),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        const Text('Status', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
-                                        Text(_debugInfo.status),
-                                      ],
-                                    ),
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        const Text('Error', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
-                                        Text(_debugInfo.error),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        const Text('Connected', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
-                                        Text(_debugInfo.isConnected ? 'Yes' : 'No'),
-                                      ],
-                                    ),
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        const Text('Mock Data', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
-                                        Text(_debugInfo.isMockData ? 'Yes' : 'No'),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
+                      // ✅ Manual Control Buttons Section
+                      _buildManualControlButtons(),
+                      // if (_showDebugPanel)
+                      //   Card(
+                      //     child: Padding(
+                      //       padding: const EdgeInsets.all(16),
+                      //       child: Column(
+                      //         crossAxisAlignment: CrossAxisAlignment.start,
+                      //         children: [
+                      //           const Text('Debug Info', style: TextStyle(fontWeight: FontWeight.bold)),
+                      //           const SizedBox(height: 12),
+                      //           Row(
+                      //             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      //             children: [
+                      //               Column(
+                      //                 crossAxisAlignment: CrossAxisAlignment.start,
+                      //                 children: [
+                      //                   const Text('Raw Hex', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
+                      //                   Text(_debugInfo.rawHex),
+                      //                 ],
+                      //               ),
+                      //               Column(
+                      //                 crossAxisAlignment: CrossAxisAlignment.start,
+                      //                 children: [
+                      //                   const Text('Decoded Hex', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
+                      //                   Text(_debugInfo.decodedHex),
+                      //                 ],
+                      //               ),
+                      //             ],
+                      //           ),
+                      //           const SizedBox(height: 12),
+                      //           Row(
+                      //             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      //             children: [
+                      //               Column(
+                      //                 crossAxisAlignment: CrossAxisAlignment.start,
+                      //                 children: [
+                      //                   const Text('Status', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
+                      //                   Text(_debugInfo.status),
+                      //                 ],
+                      //               ),
+                      //               Column(
+                      //                 crossAxisAlignment: CrossAxisAlignment.start,
+                      //                 children: [
+                      //                   const Text('Error', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
+                      //                   Text(_debugInfo.error),
+                      //                 ],
+                      //               ),
+                      //             ],
+                      //           ),
+                      //           const SizedBox(height: 12),
+                      //           Row(
+                      //             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      //             children: [
+                      //               Column(
+                      //                 crossAxisAlignment: CrossAxisAlignment.start,
+                      //                 children: [
+                      //                   const Text('Connected', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
+                      //                   Text(_debugInfo.isConnected ? 'Yes' : 'No'),
+                      //                 ],
+                      //               ),
+                      //               Column(
+                      //                 crossAxisAlignment: CrossAxisAlignment.start,
+                      //                 children: [
+                      //                   const Text('Mock Data', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
+                      //                   Text(_debugInfo.isMockData ? 'Yes' : 'No'),
+                      //                 ],
+                      //               ),
+                      //             ],
+                      //           ),
+                      //         ],
+                      //       ),
+                      //     ),
+                      //   ),
                     ],
                   ),
                 ),
@@ -790,6 +946,11 @@ class _MonitoringPageState extends State<MonitoringPage> {
 
   @override
   void dispose() {
+    // ✅ Auto-pause recording when leaving the page
+    if (_recordingStatus == 'recording' && _session != null && !_isCompleted) {
+      _handlePauseRecording();
+    }
+    
     _dataSubscription?.cancel();
     _debugSubscription?.cancel();
     // Stop broadcast monitoring when leaving the page
@@ -797,5 +958,302 @@ class _MonitoringPageState extends State<MonitoringPage> {
     // Clear DATA TAG filter
     B24BluetoothService.instance.clearDataTagFilter();
     super.dispose();
+  }
+
+  Widget _buildStatusIndicators(DeviceStatus status) {
+    // Use the already parsed boolean flags from DeviceStatus
+    final bool integrityError = status.integrityError;  // Bit 1
+    final bool notGross = !status.isTared;              // Bit 2 (NOT Tared = Gross mode)
+    final bool overRange = status.overRange;            // Bit 3
+    final bool fastMode = status.fastMode;              // Bit 4
+    final bool batteryLow = status.batteryLow;          // Bit 5
+    final bool digitalInput = status.digitalInput;      // Bit 6
+
+    // Check if there are any critical errors
+    final hasCriticalErrors = integrityError || overRange || batteryLow;
+
+    return Card(
+      color: const Color(0xFF1F2937),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'STATUS',
+              style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF), fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                // If no critical errors, show "Status OK"
+                if (!hasCriticalErrors) _buildStaticIndicator('Status OK', const Color(0xFF10B981)),
+                
+                // Critical errors - Red + Blinking
+                if (integrityError) _buildBlinkingIndicator('Sensor integrity error', const Color(0xFFEF4444)),
+                if (overRange) _buildBlinkingIndicator('OverRange', const Color(0xFFEF4444)),
+                if (batteryLow) _buildBlinkingIndicator('Battery Low', const Color(0xFFEF4444)),
+                
+                // Info indicators - Yellow + Static
+                if (notGross) _buildStaticIndicator('Not Gross', const Color(0xFFEAB308)),
+                if (fastMode) _buildStaticIndicator('Fast Mode', const Color(0xFFEAB308)),
+                if (digitalInput) _buildStaticIndicator('Digital Input', const Color(0xFFEAB308)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBlinkingIndicator(String label, Color color) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.3, end: 1.0),
+      duration: const Duration(milliseconds: 600),
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.2),
+              border: Border.all(color: color.withOpacity(value), width: 2),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.warning, size: 16, color: color),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+      onEnd: () {
+        if (mounted) setState(() {}); // Restart animation
+      },
+    );
+  }
+
+  Widget _buildStaticIndicator(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.2),
+        border: Border.all(color: color, width: 2),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.info, size: 16, color: color),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildManualControlButtons() {
+    // Show "Recording completed" message if pile is completed
+    if (_isCompleted) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF10B981), Color(0xFF059669)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.white, size: 48),
+            const SizedBox(height: 12),
+            const Text(
+              'Recording Completed',
+              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Total Records: $_recordCount',
+              style: const TextStyle(color: Colors.white70, fontSize: 14),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Show paused session info if paused
+    if (_recordingStatus == 'paused') {
+      return Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1F2937),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFFBBF24), width: 2),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.pause_circle, color: Color(0xFFFBBF24), size: 32),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Recording Paused',
+                          style: TextStyle(color: Color(0xFFFBBF24), fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          'Saved Records: $_recordCount',
+                          style: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Press Resume to continue recording or Finish to complete the pile.',
+                  style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 12),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _handleResumeRecording,
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text('Resume'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF10B981),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _handleComplete,
+                  icon: const Icon(Icons.check_circle),
+                  label: const Text('Finish'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2563EB),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
+    // Show recording control buttons if recording is idle
+    if (_recordingStatus == 'idle') {
+      return Column(
+        children: [
+          // ✅ Show existing records info if there are any
+          if (_recordCount > 0)
+            Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1F2937),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF3B82F6), width: 2),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline, color: Color(0xFF3B82F6), size: 28),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Existing Data Found',
+                          style: TextStyle(color: Color(0xFF3B82F6), fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'This pile has $_recordCount saved record(s). New data will be added to existing records.',
+                          style: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _handleStartRecording,
+              icon: const Icon(Icons.play_arrow, size: 28),
+              label: const Text('Start Recording', style: TextStyle(fontSize: 18)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF10B981),
+                padding: const EdgeInsets.symmetric(vertical: 20),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    // Show recording control buttons if recording is active
+    if (_recordingStatus == 'recording') {
+      return Row(
+        children: [
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: _handlePauseRecording,
+              icon: const Icon(Icons.pause),
+              label: const Text('Pause'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFBBF24),
+                foregroundColor: const Color(0xFF1F2937),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: _handleComplete,
+              icon: const Icon(Icons.check_circle),
+              label: const Text('Finish'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2563EB),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Container(); // Default return (should not reach here)
   }
 }

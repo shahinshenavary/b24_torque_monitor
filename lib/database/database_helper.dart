@@ -153,6 +153,13 @@ class DatabaseHelper {
     return maps.map((map) => Pile.fromMap(map)).toList();
   }
 
+  Future<Pile?> getPile(String id) async {
+    final db = await database;
+    final maps = await db.query('piles', where: 'id = ?', whereArgs: [id]);
+    if (maps.isEmpty) return null;
+    return Pile.fromMap(maps.first);
+  }
+
   Future<void> updatePile(Pile pile) async {
     final db = await database;
     await db.update('piles', pile.toMap(), where: 'id = ?', whereArgs: [pile.id]);
