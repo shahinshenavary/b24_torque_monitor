@@ -49,8 +49,11 @@ class _PileListPageState extends State<PileListPage> {
 
   Color _getStatusColor(String status) {
     switch (status) {
-      case 'completed':
+      case 'done':
+      case 'completed': // ✅ Keep for backward compatibility
         return const Color(0xFF10B981);
+      case 'edited':
+        return const Color(0xFF8B5CF6); // Purple for edited
       case 'in_progress':
         return const Color(0xFFFBBF24);
       default:
@@ -60,8 +63,11 @@ class _PileListPageState extends State<PileListPage> {
 
   String _getStatusText(String status) {
     switch (status) {
-      case 'completed':
-        return 'Completed';
+      case 'done':
+      case 'completed': // ✅ Keep for backward compatibility
+        return 'Done';
+      case 'edited':
+        return 'Edited';
       case 'in_progress':
         return 'In Progress';
       default:
@@ -137,9 +143,11 @@ class _PileListPageState extends State<PileListPage> {
                             margin: const EdgeInsets.only(bottom: 12),
                             child: InkWell(
                               onTap: () async {
-                                // ✅ Check if pile is completed and warn user
-                                if (pile.status == 'completed') {
+                                // ✅ Check if pile is done and ask for edit reason
+                                if (pile.status == 'done' || pile.status == 'completed') {
                                   final recordCount = await DatabaseHelper.instance.getMeasurementsByPile(pile.id);
+                                  
+                                  final editReasonController = TextEditingController();
                                   
                                   final confirmed = await showDialog<bool>(
                                     context: context,
@@ -149,7 +157,7 @@ class _PileListPageState extends State<PileListPage> {
                                         children: [
                                           Icon(Icons.warning, color: Color(0xFFFBBF24), size: 28),
                                           SizedBox(width: 8),
-                                          Text('Pile Already Completed'),
+                                          Text('Pile Already Done'),
                                         ],
                                       ),
                                       content: Column(
@@ -197,10 +205,25 @@ class _PileListPageState extends State<PileListPage> {
                                               ],
                                             ),
                                           ),
+                                          const SizedBox(height: 16),
+                                          const Text(
+                                            'Are you sure you want to work on this pile again?',
+                                            style: TextStyle(fontSize: 13, color: Color(0xFFFBBF24)),
+                                          ),
                                           const SizedBox(height: 12),
                                           const Text(
-                                            'Are you sure you want to open this pile?',
-                                            style: TextStyle(fontSize: 13, color: Color(0xFFFBBF24)),
+                                            'Please explain the reason for editing (max 50 characters):',
+                                            style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          TextField(
+                                            controller: editReasonController,
+                                            maxLength: 50,
+                                            decoration: const InputDecoration(
+                                              hintText: 'e.g., Incorrect depth reading',
+                                              border: OutlineInputBorder(),
+                                              counterText: '',
+                                            ),
                                           ),
                                         ],
                                       ),
@@ -210,17 +233,48 @@ class _PileListPageState extends State<PileListPage> {
                                           child: const Text('Cancel'),
                                         ),
                                         ElevatedButton(
-                                          onPressed: () => Navigator.of(context).pop(true),
+                                          onPressed: () {
+                                            if (editReasonController.text.trim().isEmpty) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                const SnackBar(
+                                                  content: Text('Please provide a reason for editing'),
+                                                  backgroundColor: Color(0xFFF87171),
+                                                ),
+                                              );
+                                              return;
+                                            }
+                                            Navigator.of(context).pop(true);
+                                          },
                                           style: ElevatedButton.styleFrom(
-                                            backgroundColor: const Color(0xFF3B82F6),
+                                            backgroundColor: const Color(0xFFFBBF24),
+                                            foregroundColor: const Color(0xFF1F2937),
                                           ),
-                                          child: const Text('Yes, Open'),
+                                          child: const Text('Yes, Continue'),
                                         ),
                                       ],
                                     ),
                                   );
                                   
                                   if (confirmed != true) return;
+                                  
+                                  // ✅ Save edit reason and change status to 'edited'
+                                  final updatedPile = pile.copyWith(
+                                    status: 'edited',
+                                    editReason: editReasonController.text.trim(),
+                                  );
+                                  await DatabaseHelper.instance.updatePile(updatedPile);
+                                  
+                                  await Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (context) => MonitoringPage(
+                                        project: widget.project,
+                                        pile: updatedPile,
+                                        operatorCode: widget.operatorCode,
+                                      ),
+                                    ),
+                                  );
+                                  _loadPiles();
+                                  return;
                                 }
                                 
                                 await Navigator.of(context).push(

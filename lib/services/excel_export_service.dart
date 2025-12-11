@@ -112,7 +112,8 @@ class ExcelExportService {
       ['Location:', project.location],
       ['Created Date:', _formatDate(DateTime.fromMillisecondsSinceEpoch(project.createdAt))],
       ['Total Piles:', piles.length.toString()],
-      ['Completed Piles:', piles.where((p) => p.status == 'completed').length.toString()],
+      ['Done Piles:', piles.where((p) => p.status == 'done' || p.status == 'completed').length.toString()],
+      ['Edited Piles:', piles.where((p) => p.status == 'edited').length.toString()],
       ['In Progress:', piles.where((p) => p.status == 'in_progress').length.toString()],
       ['Pending:', piles.where((p) => p.status == 'pending').length.toString()],
     ];
@@ -167,6 +168,7 @@ class ExcelExportService {
       'Final Depth (m)',
       'Status',
       'Measurements Count',
+      'Edit Reason', // ✅ اضافه شد
     ];
 
     for (int i = 0; i < headers.length; i++) {
@@ -197,6 +199,7 @@ class ExcelExportService {
         pile.finalDepth != null ? pile.finalDepth!.toStringAsFixed(2) : 'N/A',
         _getStatusText(pile.status),
         measurements.length.toString(),
+        pile.editReason ?? '', // ✅ اضافه شد - empty string if null
       ];
 
       for (int i = 0; i < rowData.length; i++) {
@@ -335,8 +338,11 @@ class ExcelExportService {
 
   String _getStatusText(String status) {
     switch (status) {
-      case 'completed':
-        return 'Completed';
+      case 'done':
+      case 'completed': // ✅ Backward compatibility
+        return 'Done';
+      case 'edited':
+        return 'Edited';
       case 'in_progress':
         return 'In Progress';
       case 'pending':

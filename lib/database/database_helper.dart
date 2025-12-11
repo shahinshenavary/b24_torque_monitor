@@ -23,7 +23,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 6, // ✅ Changed to 6 for status columns
+      version: 7, // ✅ Changed to 7 for editReason column
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -59,6 +59,11 @@ class DatabaseHelper {
       await db.execute('ALTER TABLE measurements ADD COLUMN statusByte INTEGER DEFAULT 0');
       await db.execute('ALTER TABLE measurements ADD COLUMN statusJson TEXT DEFAULT "{}"');
     }
+    
+    if (oldVersion < 7) {
+      // Migration from version 6 to 7: Add editReason column to piles
+      await db.execute('ALTER TABLE piles ADD COLUMN editReason TEXT');
+    }
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -73,20 +78,7 @@ class DatabaseHelper {
       )
     ''');
 
-    await db.execute('''
-      CREATE TABLE piles (
-        id TEXT PRIMARY KEY,
-        projectId TEXT NOT NULL,
-        pileId TEXT NOT NULL,
-        pileNumber TEXT NOT NULL,
-        pileType TEXT NOT NULL,
-        expectedTorque REAL NOT NULL,
-        expectedDepth REAL NOT NULL,
-        status TEXT NOT NULL,
-        finalDepth REAL,
-        FOREIGN KEY (projectId) REFERENCES projects (id) ON DELETE CASCADE
-      )
-    ''');
+    await db.execute('''\n      CREATE TABLE piles (\n        id TEXT PRIMARY KEY,\n        projectId TEXT NOT NULL,\n        pileId TEXT NOT NULL,\n        pileNumber TEXT NOT NULL,\n        pileType TEXT NOT NULL,\n        expectedTorque REAL NOT NULL,\n        expectedDepth REAL NOT NULL,\n        status TEXT NOT NULL,\n        finalDepth REAL,\n        editReason TEXT,\n        FOREIGN KEY (projectId) REFERENCES projects (id) ON DELETE CASCADE\n      )\n    ''');
 
     await db.execute('''
       CREATE TABLE pile_sessions (
@@ -102,7 +94,7 @@ class DatabaseHelper {
       )
     ''');
 
-    await db.execute('''\n      CREATE TABLE measurements (\n        id TEXT PRIMARY KEY,\n        projectId TEXT NOT NULL,\n        pileId TEXT NOT NULL,\n        operatorCode TEXT NOT NULL,\n        timestamp INTEGER NOT NULL,\n        torque REAL NOT NULL,\n        force REAL NOT NULL,\n        mass REAL NOT NULL,\n        depth REAL NOT NULL,\n        statusByte INTEGER DEFAULT 0,\n        statusJson TEXT DEFAULT \"{}\",\n        FOREIGN KEY (projectId) REFERENCES projects (id) ON DELETE CASCADE,\n        FOREIGN KEY (pileId) REFERENCES piles (id) ON DELETE CASCADE\n      )\n    ''');
+    await db.execute('''\n      CREATE TABLE measurements (\n        id TEXT PRIMARY KEY,\n        projectId TEXT NOT NULL,\n        pileId TEXT NOT NULL,\n        operatorCode TEXT NOT NULL,\n        timestamp INTEGER NOT NULL,\n        torque REAL NOT NULL,\n        force REAL NOT NULL,\n        mass REAL NOT NULL,\n        depth REAL NOT NULL,\n        statusByte INTEGER DEFAULT 0,\n        statusJson TEXT DEFAULT \"{}\",\n        editReason TEXT DEFAULT \"\",\n        FOREIGN KEY (projectId) REFERENCES projects (id) ON DELETE CASCADE,\n        FOREIGN KEY (pileId) REFERENCES piles (id) ON DELETE CASCADE\n      )\n    ''');
 
     await db.execute('CREATE INDEX idx_measurements_pile ON measurements(pileId)');
     await db.execute('CREATE INDEX idx_measurements_timestamp ON measurements(timestamp)');
