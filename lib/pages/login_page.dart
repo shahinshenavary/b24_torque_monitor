@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'home_page.dart';
 import 'debug_bluetooth_page.dart';
 
@@ -14,17 +15,59 @@ class _LoginPageState extends State<LoginPage> {
   final _codeController = TextEditingController();
   static const String OPERATOR_CODE = 'OP2024';
   String? _errorMessage;
+  bool _isCheckingLogin = true; // ✅ Flag to show loading while checking
 
-  void _handleLogin() {
+  @override
+  void initState() {
+    super.initState();
+    _checkExistingLogin();
+  }
+
+  // ✅ Check if user is already logged in
+  Future<void> _checkExistingLogin() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedOperatorCode = prefs.getString('operator_code');
+      
+      if (savedOperatorCode != null && savedOperatorCode.isNotEmpty) {
+        // User is already logged in, navigate to home
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (context) => HomePage(operatorCode: savedOperatorCode),
+            ),
+          );
+        }
+      } else {
+        // No saved login, show login page
+        setState(() => _isCheckingLogin = false);
+      }
+    } catch (e) {
+      // Error checking, show login page
+      setState(() => _isCheckingLogin = false);
+    }
+  }
+
+  void _handleLogin() async {
     setState(() => _errorMessage = null);
 
     if (_formKey.currentState!.validate()) {
       if (_codeController.text == OPERATOR_CODE) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (context) => HomePage(operatorCode: _codeController.text),
-          ),
-        );
+        // ✅ Save operator code to SharedPreferences
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('operator_code', _codeController.text);
+        } catch (e) {
+          debugPrint('Error saving operator code: $e');
+        }
+        
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (context) => HomePage(operatorCode: _codeController.text),
+            ),
+          );
+        }
       } else {
         setState(() => _errorMessage = 'Invalid operator code');
       }
