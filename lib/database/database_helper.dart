@@ -17,6 +17,12 @@ class DatabaseHelper {
     return _database!;
   }
 
+  /// ✅ Get database file path
+  Future<String> getDatabasePath() async {
+    final dbPath = await getDatabasesPath();
+    return join(dbPath, 'b24_torque.db');
+  }
+
   Future<Database> _initDB(String filePath) async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);

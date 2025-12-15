@@ -5,6 +5,7 @@ import '../models/project.dart';
 import '../models/pile.dart';
 import '../database/database_helper.dart';
 import '../services/excel_export_service.dart';
+import '../services/database_export_service.dart'; // ✅ Add database export service
 import 'add_project_page.dart';
 import 'pile_list_page.dart';
 import 'debug_bluetooth_page.dart';
@@ -128,6 +129,63 @@ class _ProjectsPageState extends State<ProjectsPage> {
     }
   }
 
+  // ✅ Share entire database
+  Future<void> _shareDatabaseFile() async {
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => WillPopScope(
+        onWillPop: () async => false,
+        child: const AlertDialog(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Preparing database backup...'),
+              SizedBox(height: 8),
+              Text(
+                'Please wait',
+                style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    try {
+      await DatabaseExportService.instance.shareDatabaseFile();
+      
+      // Close loading dialog
+      if (mounted) Navigator.pop(context);
+      
+      // Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Database backup shared successfully'),
+            backgroundColor: Color(0xFF10B981),
+          ),
+        );
+      }
+    } catch (e) {
+      // Close loading dialog
+      if (mounted) Navigator.pop(context);
+      
+      // Show error
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to share database: $e'),
+            backgroundColor: const Color(0xFFF87171),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -143,6 +201,11 @@ class _ProjectsPageState extends State<ProjectsPage> {
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.storage),
+            tooltip: 'Share Database Backup',
+            onPressed: _shareDatabaseFile,
+          ),
           IconButton(
             icon: const Icon(Icons.bug_report),
             tooltip: 'Debug Scanner',
