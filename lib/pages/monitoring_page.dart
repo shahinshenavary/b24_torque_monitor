@@ -68,15 +68,40 @@ class _MonitoringPageState extends State<MonitoringPage> {
   // ✅ Watchdog timer to detect frozen data
   Timer? _watchdogTimer;
   int _lastDataReceivedTimestamp = 0;
-  static const int WATCHDOG_TIMEOUT_MS = 6000; // 6 seconds
+  int _watchdogTimeoutMs = 6000; // Default 6 seconds, now configurable
+  
+  // ✅ NEW: Averaging settings and buffer
+  bool _useAveraging = false;
+  int _averageSampleCount = 5;
+  final List<double> _torqueBuffer = []; // Buffer to store recent torque values
 
   @override
   void initState() {
     super.initState();
     _loadSession();
+    _loadSettings(); // ✅ Load all settings including averaging and watchdog
     _connectBluetooth();
-    _loadRecordingThreshold();
-    _startWatchdogTimer(); // ✅ Start watchdog to detect frozen data
+  }
+
+  // ✅ Load all settings from SharedPreferences
+  Future<void> _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    
+    final threshold = prefs.getDouble('recording_threshold') ?? 100.0;
+    final useAveraging = prefs.getBool('use_averaging') ?? false;
+    final averageCount = prefs.getInt('average_sample_count') ?? 5;
+    final watchdogTimeout = prefs.getInt('watchdog_timeout_seconds') ?? 6;
+    
+    setState(() {
+      _recordingThreshold = threshold;
+      _useAveraging = useAveraging;
+      _averageSampleCount = averageCount;
+      _watchdogTimeoutMs = watchdogTimeout * 1000; // Convert to milliseconds
+    });
+    
+    // Restart watchdog with new timeout
+    _watchdogTimer?.cancel();
+    _startWatchdogTimer();
   }
 
   Future<void> _loadRecordingThreshold() async {
@@ -150,6 +175,12 @@ class _MonitoringPageState extends State<MonitoringPage> {
   }
 
   void _handleTorqueData(TorqueData data) {
+    // ✅ Add torque to buffer for averaging
+    _torqueBuffer.add(data.torque);
+    if (_torqueBuffer.length > _averageSampleCount) {
+      _torqueBuffer.removeAt(0); // Remove oldest value
+    }
+    
     final isAboveThreshold = data.torque.abs() >= _recordingThreshold;
     
     if (isAboveThreshold) {
@@ -692,7 +723,7 @@ class _MonitoringPageState extends State<MonitoringPage> {
                                   ),
                                 
                                 Text(
-                                  _currentData.torque.toStringAsFixed(5),
+                                  _displayedTorque.toStringAsFixed(5),
                                   style: TextStyle(
                                     fontSize: 64,
                                     fontWeight: FontWeight.bold,
@@ -821,7 +852,7 @@ class _MonitoringPageState extends State<MonitoringPage> {
       final now = DateTime.now().millisecondsSinceEpoch;
       final timeSinceLastData = now - _lastDataReceivedTimestamp;
       
-      if (timeSinceLastData > WATCHDOG_TIMEOUT_MS) {
+      if (timeSinceLastData > _watchdogTimeoutMs) {
         debugPrint('⚠️ WATCHDOG: No data for ${timeSinceLastData}ms - reconnecting...');
         _reconnectBluetooth();
       }
@@ -953,5 +984,16 @@ class _MonitoringPageState extends State<MonitoringPage> {
         ],
       ),
     );
+  }
+
+  // ✅ Calculate displayed torque (either instant or averaged)
+  double get _displayedTorque {
+    if (!_useAveraging || _torqueBuffer.isEmpty) {
+      return _currentData.torque;
+    }
+    
+    // Calculate average of buffer
+    final sum = _torqueBuffer.reduce((a, b) => a + b);
+    return sum / _torqueBuffer.length;
   }
 }
